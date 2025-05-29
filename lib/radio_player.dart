@@ -22,10 +22,14 @@ class RadioPlayer {
   Stream<List<String>>? _metadataStream;
 
   /// Set new streaming URL.
-  Future<void> setChannel(
-      {required String title, required String url, String? imagePath}) async {
+  Future<void> setChannel({
+    required String title,
+    required String url,
+    String? imagePath,
+    required String isPremiumUser,
+  }) async {
     await Future.delayed(Duration(milliseconds: 500));
-    await _methodChannel.invokeMethod('set', [title, url]);
+    await _methodChannel.invokeMethod('set', [title, url, isPremiumUser]);
 
     if (imagePath != null) setDefaultArtwork(imagePath);
   }
@@ -71,10 +75,9 @@ class RadioPlayer {
     final byteData = await _metadataArtworkChannel.send(ByteData(0));
     Image? image;
 
-    if (byteData != null) {
+    if (byteData != null)
       image = Image.memory(byteData.buffer.asUint8List(),
           key: UniqueKey(), fit: BoxFit.cover);
-    }
 
     return image;
   }
