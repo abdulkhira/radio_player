@@ -43,6 +43,8 @@ public class SwiftRadioPlayerPlugin: NSObject, FlutterPlugin {
                 let args = call.arguments as! Array<String>
                 player.streamTitle = args[0]
                 player.streamUrl = args[1]
+                player.isPremiumUser = args[2] == "1"
+                player.artWorkUrl = args[3]
                 player.setMediaItem()
             case "play":
                 player.play()

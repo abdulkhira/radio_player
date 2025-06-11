@@ -59,6 +59,7 @@ class RadioPlayerService : Service(), Player.Listener {
     private var notificationTitle = ""
     private var isForegroundService = false
     private var isPremiumUser = true
+    private var artWorkUrl = ""
     private var metadata: ArrayList<String>? = null
     private var localBinder = LocalBinder()
     private var playbackState = Player.STATE_IDLE
@@ -110,8 +111,14 @@ class RadioPlayerService : Service(), Player.Listener {
     }
 
     /** Initializing the player with a new data. */
-    fun setMediaItem(streamTitle: String, streamUrl: String, isPremium: String) {
+    fun setMediaItem(
+        streamTitle: String,
+        streamUrl: String,
+        isPremium: String,
+        artWorkUrl: String
+    ) {
         this.isPremiumUser = isPremium == "1"
+        this.artWorkUrl = artWorkUrl
         mediaItems = runBlocking {
             GlobalScope.async {
                 parseUrls(streamUrl).map { MediaItem.fromUri(it) }
@@ -320,20 +327,39 @@ class RadioPlayerService : Service(), Player.Listener {
         var artwork: String = ""
 
         try {
-            val term = URLEncoder.encode(artist + " - " + track, "utf-8")
+            if (artWorkUrl.isNotEmpty()) {
+                val response = runBlocking {
+                    GlobalScope.async {
+                        URL("https://a8.asurahosting.com/public/deepnova/oembed/json").readText()
+                    }.await()
+                }
 
-            val response = runBlocking {
-                GlobalScope.async {
-                    URL("https://itunes.apple.com/search?term=" + term + "&limit=1").readText()
-                }.await()
-            }
+                val jsonObject = JSONObject(response)
 
-            val jsonObject = JSONObject(response)
+                // Safely get thumbnail URL
+                if (jsonObject.has("thumbnail_url")) {
+                    artwork = jsonObject.getString("thumbnail_url")
+                    println("Thumbnail artwork: $artwork")
+                } else {
+                    println("Thumbnail URL not found in response.")
+                }
+            } else {
+                val term = URLEncoder.encode(artist + " - " + track, "utf-8")
 
-            if (jsonObject.getInt("resultCount") > 0) {
-                val artworkUrl30: String =
-                    jsonObject.getJSONArray("results").getJSONObject(0).getString("artworkUrl30")
-                artwork = artworkUrl30.replace("30x30bb", "500x500bb")
+                val response = runBlocking {
+                    GlobalScope.async {
+                        URL("https://itunes.apple.com/search?term=" + term + "&limit=1").readText()
+                    }.await()
+                }
+
+                val jsonObject = JSONObject(response)
+
+                if (jsonObject.getInt("resultCount") > 0) {
+                    val artworkUrl30: String =
+                        jsonObject.getJSONArray("results").getJSONObject(0)
+                            .getString("artworkUrl30")
+                    artwork = artworkUrl30.replace("30x30bb", "500x500bb")
+                }
             }
         } catch (e: Throwable) {
             println(e)

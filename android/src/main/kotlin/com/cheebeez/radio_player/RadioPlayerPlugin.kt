@@ -99,7 +99,7 @@ class RadioPlayerPlugin : FlutterPlugin, MethodCallHandler {
         when (call.method) {
             "set" -> {
                 val args = call.arguments<ArrayList<String>>()!!
-                service.setMediaItem(args[0], args[1], args[2])
+                service.setMediaItem(args[0], args[1], args[2], args[3])
             }
             "play" -> {
                 service.play()

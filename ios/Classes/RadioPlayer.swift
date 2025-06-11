@@ -15,9 +15,11 @@ class RadioPlayer: NSObject, AVPlayerItemMetadataOutputPushDelegate {
     var currentMetadata: Array<String>!
     var streamTitle: String!
     var streamUrl: String!
+    var artWorkUrl: String!
     var ignoreIcy: Bool = false
-    var itunesArtworkParser: Bool = false
+    var itunesArtworkParser: Bool = true
     var interruptionObserverAdded: Bool = false
+    var isPremiumUser: Bool = false
 
     func setMediaItem() {
         MPNowPlayingInfoCenter.default().nowPlayingInfo = [MPMediaItemPropertyTitle: streamTitle, ]
@@ -57,7 +59,7 @@ class RadioPlayer: NSObject, AVPlayerItemMetadataOutputPushDelegate {
         var metadata = newMetadata.map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
 
         // Parse artwork from iTunes.
-        if (itunesArtworkParser && metadata[2].isEmpty) {
+        if (metadata[2].isEmpty && isPremiumUser) {
             metadata[2] = parseArtworkFromItunes(metadata[0], metadata[1])
         }
 
@@ -180,7 +182,9 @@ class RadioPlayer: NSObject, AVPlayerItemMetadataOutputPushDelegate {
         rawMetadata!.count > 1 ? result.append(rawMetadata![1].stringValue!) : result.append("")
 
         // Update metadata
-        setMetadata(result)
+        if (isPremiumUser) {
+            setMetadata(result)
+        }
     }
 
     func downloadImage(_ value: String) -> UIImage? {
@@ -204,40 +208,89 @@ class RadioPlayer: NSObject, AVPlayerItemMetadataOutputPushDelegate {
     func parseArtworkFromItunes(_ artist: String, _ track: String) -> String {
         var artwork: String = ""
 
-        // Generate a request.
-        guard let term = (artist + " - " + track).addingPercentEncoding(withAllowedCharacters: .alphanumerics) 
-        else { return artwork }
+        if(artWorkUrl != nil && !artWorkUrl.isEmpty) {
+            // guard let url = URL(string: "https://a8.asurahosting.com/public/deepnova/oembed/json") else {
+            //     completion(nil)
+            //     return
+            // }
 
-        guard let url = URL(string: "https://itunes.apple.com/search?term=" + term + "&limit=1")
-        else { return artwork }
+            // let task = URLSession.shared.dataTask(with: url) { data, response, error in
+            //     guard
+            //         let data = data,
+            //         error == nil,
+            //         let json = try? JSONSerialization.jsonObject(with: data, options: []) as? [String: Any],
+            //         let thumbnailUrl = json["thumbnail_url"] as? String
+            //     else {
+            //         completion(nil)
+            //         return
+            //     }
 
-        // Download content.
-        var jsonData: Data?
-        let semaphore = DispatchSemaphore(value: 0)
+            //     completion(thumbnailUrl)
+            // }
 
-        let task = URLSession.shared.dataTask(with: url) { (data, response, error) in
-            if let data = data, error == nil {
-                jsonData = data
+            // task.resume()
+              let semaphore = DispatchSemaphore(value: 0)
+
+            // Step 1: Try AzuraCast
+            if let azuraUrl = URL(string: "https://a8.asurahosting.com/public/deepnova/oembed/json") {
+                let task = URLSession.shared.dataTask(with: azuraUrl) { data, response, error in
+                    if
+                        let data = data,
+                        error == nil,
+                        let json = try? JSONSerialization.jsonObject(with: data, options: []) as? [String: Any],
+                        let azuraArtwork = json["thumbnail_url"] as? String,
+                        !azuraArtwork.isEmpty
+                    {
+                        artwork = azuraArtwork
+                        semaphore.signal()
+                        return
+                    }
+
+                    // // Fallback to iTunes if AzuraCast failed or empty
+                    // if let fallback = fetchArtworkFromiTunesSync(artist: artist, track: track) {
+                    //     artwork = fallback
+                    // }
+                    // semaphore.signal()
+                }
+
+                task.resume()
+                semaphore.wait()
             }
-            semaphore.signal()
+        } else {
+            // Generate a request.
+            guard let term = (artist + " - " + track).addingPercentEncoding(withAllowedCharacters: .alphanumerics) 
+            else { return artwork }
+
+            guard let url = URL(string: "https://itunes.apple.com/search?term=" + term + "&limit=1")
+            else { return artwork }
+
+            // Download content.
+            var jsonData: Data?
+            let semaphore = DispatchSemaphore(value: 0)
+
+            let task = URLSession.shared.dataTask(with: url) { (data, response, error) in
+                if let data = data, error == nil {
+                    jsonData = data
+                }
+                semaphore.signal()
+            }
+
+            task.resume()
+            let _ = semaphore.wait(timeout: .distantFuture)
+
+            // Convert content to Dictonary.
+            guard let jsonData = jsonData else { return artwork }
+            guard let dict = try? JSONSerialization.jsonObject(with: jsonData, options: .allowFragments) as? [String:Any]
+            else { return artwork }
+
+            // Make sure the result is found.
+            guard let _ = dict["resultCount"], dict["resultCount"] as! Int > 0 else { return artwork }
+
+            // Get artwork
+            guard let results = dict["results"] as? Array<[String:Any]> else { return artwork }
+            guard let artworkUrl30 = results[0]["artworkUrl30"] as? String else { return artwork }
+            artwork = artworkUrl30.replacingOccurrences(of: "30x30bb", with: "500x500bb")
         }
-
-        task.resume()
-        let _ = semaphore.wait(timeout: .distantFuture)
-
-        // Convert content to Dictonary.
-        guard let jsonData = jsonData else { return artwork }
-        guard let dict = try? JSONSerialization.jsonObject(with: jsonData, options: .allowFragments) as? [String:Any]
-        else { return artwork }
-
-        // Make sure the result is found.
-        guard let _ = dict["resultCount"], dict["resultCount"] as! Int > 0 else { return artwork }
-
-        // Get artwork
-        guard let results = dict["results"] as? Array<[String:Any]> else { return artwork }
-        guard let artworkUrl30 = results[0]["artworkUrl30"] as? String else { return artwork }
-        artwork = artworkUrl30.replacingOccurrences(of: "30x30bb", with: "500x500bb")
-
         return artwork
     }
 }

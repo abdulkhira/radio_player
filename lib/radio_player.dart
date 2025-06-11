@@ -13,10 +13,8 @@ class RadioPlayer {
   static const _metadataEvents = EventChannel('radio_player/metadataEvents');
   static const _stateEvents = EventChannel('radio_player/stateEvents');
 
-  static const _defaultArtworkChannel =
-      BasicMessageChannel("radio_player/setArtwork", BinaryCodec());
-  static const _metadataArtworkChannel =
-      BasicMessageChannel("radio_player/getArtwork", BinaryCodec());
+  static const _defaultArtworkChannel = BasicMessageChannel("radio_player/setArtwork", BinaryCodec());
+  static const _metadataArtworkChannel = BasicMessageChannel("radio_player/getArtwork", BinaryCodec());
 
   Stream<bool>? _stateStream;
   Stream<List<String>>? _metadataStream;
@@ -27,9 +25,10 @@ class RadioPlayer {
     required String url,
     String? imagePath,
     required String isPremiumUser,
+    required String artWorkUrl,
   }) async {
     await Future.delayed(Duration(milliseconds: 500));
-    await _methodChannel.invokeMethod('set', [title, url, isPremiumUser]);
+    await _methodChannel.invokeMethod('set', [title, url, isPremiumUser, artWorkUrl]);
 
     if (imagePath != null) setDefaultArtwork(imagePath);
   }
@@ -48,9 +47,7 @@ class RadioPlayer {
 
   /// Set the default image in the notification panel
   Future<void> setDefaultArtwork(String image) async {
-    final byteData = image.startsWith('http')
-        ? await NetworkAssetBundle(Uri.parse(image)).load(image)
-        : await rootBundle.load(image);
+    final byteData = image.startsWith('http') ? await NetworkAssetBundle(Uri.parse(image)).load(image) : await rootBundle.load(image);
 
     _defaultArtworkChannel.send(byteData);
   }
@@ -75,25 +72,21 @@ class RadioPlayer {
     final byteData = await _metadataArtworkChannel.send(ByteData(0));
     Image? image;
 
-    if (byteData != null)
-      image = Image.memory(byteData.buffer.asUint8List(),
-          key: UniqueKey(), fit: BoxFit.cover);
+    if (byteData != null) image = Image.memory(byteData.buffer.asUint8List(), key: UniqueKey(), fit: BoxFit.cover);
 
     return image;
   }
 
   /// Get the playback state stream.
   Stream<bool> get stateStream {
-    _stateStream ??=
-        _stateEvents.receiveBroadcastStream().map<bool>((value) => value);
+    _stateStream ??= _stateEvents.receiveBroadcastStream().map<bool>((value) => value);
 
     return _stateStream!;
   }
 
   /// Get the metadata stream.
   Stream<List<String>> get metadataStream {
-    _metadataStream ??=
-        _metadataEvents.receiveBroadcastStream().map((metadata) {
+    _metadataStream ??= _metadataEvents.receiveBroadcastStream().map((metadata) {
       return metadata.map<String>((value) => value as String).toList();
     });
 
