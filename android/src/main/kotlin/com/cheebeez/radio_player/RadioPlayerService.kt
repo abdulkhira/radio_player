@@ -330,7 +330,7 @@ class RadioPlayerService : Service(), Player.Listener {
             if (artWorkUrl.isNotEmpty()) {
                 val response = runBlocking {
                     GlobalScope.async {
-                        URL("https://a8.asurahosting.com/public/deepnova/oembed/json").readText()
+                        URL(artWorkUrl).readText()
                     }.await()
                 }
 
