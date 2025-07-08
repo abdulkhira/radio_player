@@ -232,7 +232,7 @@ class RadioPlayer: NSObject, AVPlayerItemMetadataOutputPushDelegate {
               let semaphore = DispatchSemaphore(value: 0)
 
             // Step 1: Try AzuraCast
-            if let azuraUrl = URL(string: "https://a8.asurahosting.com/public/deepnova/oembed/json") {
+            if let azuraUrl = URL(string: artWorkUrl) {
                 let task = URLSession.shared.dataTask(with: azuraUrl) { data, response, error in
                     if
                         let data = data,
